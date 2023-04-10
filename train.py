@@ -79,7 +79,7 @@ def twoD2threeD(locs, hrtfs):
         hrtfs = hrtfs[index, rand_f]
     azi = locs[index, 0] / 180 * np.pi
     ele = locs[index, 1] / 180 * np.pi
-    x = hrtfs * np.cos(ele) * np.cos(azi)
+    x = hrtfs * np.cos(ele) * np.cos(azi) # ?
     y = hrtfs * np.cos(ele) * np.sin(azi)
     z = hrtfs * np.sin(ele)
     xyz = np.array([x,y,z]).T
@@ -152,7 +152,7 @@ def initParams():
     parser.add_argument("-f", "--frequency_idx", type=int, default=1000, help="index of frequency of HRTF, 1000 if use all")
     parser.add_argument("-s", "--scale", choices=["log", "linear"],
                         default="log", help="magnitude in the log or linear scale")
-    parser.add_argument("--norm_way", type=int, default=2, help="way of normalization across datasets")
+    parser.add_argument("--norm_way", type=int, default=4, help="way of normalization across datasets")
 
     # Model parameters
     parser.add_argument("-w", "--first_w0", type=float, default=30, help="w0 for the first SIREN layer")
@@ -167,7 +167,7 @@ def initParams():
     parser.add_argument("--lr", type=float, default=3 * 1e-4, help="adam learning rate")
     parser.add_argument("--decay", type=float, default=0.01, help="learning rate decay as keras style")
 
-    parser.add_argument("--gpu", type=str, help="GPU index", default="0")
+    parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--interval', type=int, default=3, help="epoch interval for plot check")
 
     args = parser.parse_args()
@@ -386,11 +386,11 @@ def run(args):
 if __name__ == "__main__":
     import wandb
 
-    os.environ["WANDB_API_KEY"] = "ad172f7793efc7ce6fc853de46ef015d6f1769cf"
+    os.environ["WANDB_API_KEY"] = "b91e5bd2690b460ea228f7b58fd008be543d9609"
     # wandb.login()
     args = initParams()
-    wandb.init(project="hrtf_siren",
-               entity="yzyouzhang",
+    wandb.init(project="hrtf_siren_test",
+               entity="air_lab",
                name=os.path.basename(args.out_fold),
                config=args)
     F, testing_lsd = run(args)

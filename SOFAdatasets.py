@@ -1,3 +1,4 @@
+#%%
 import os, glob
 import scipy.io as sio
 import torch
@@ -8,7 +9,6 @@ import sofa
 from natsort import natsorted
 import librosa
 from matplotlib import pyplot as plt
-
 
 DATASET_PATH = "/data2/neil/HRTF/datasets/"
 
@@ -70,13 +70,21 @@ class SOFADataset(Dataset):
 
     def _expand_basic_info(self):
         self.all_sofa_files = natsorted(self._get_all_sofa_files_from_dir())
-        self._get_locations_from_one_sofa(self.all_sofa_files[0])  # a list of all the locations in cartesian in degrees
+        try:
+            # self._get_locations_from_one_sofa(self.all_sofa_files[0])  # a list of all the locations in cartesian in degrees
+            self._get_locations_from_all_sofa(self.all_sofa_files)
+        except IndexError:
+            print(self.all_sofa_files)
         self.subject_IDs = [self._get_ID_from_sofa_path(path) for path in self.all_sofa_files]  # the id of the subjects
         self.num_of_locations = len(self.locations)  # should be equal to the length of the list of locations
         self.num_of_subjects = len(self.subject_IDs)   # the length of the list of raw subject ids
         self.num_of_ears = 2 * len(self.subject_IDs)  # should be equal to twice the num of subjects
         self.location_dict = bidict(dict(zip(self.locations, range(len(self.locations)))))
         self.subject_dict = bidict(dict(zip(self.subject_IDs, range(len(self.subject_IDs)))))
+        self.all_location_dict = {}
+        for key, value in self.all_locations.items():
+            self.all_location_dict[key] = bidict(dict(zip(value, range(len(value)))))
+        
 
     def _get_all_sofa_files_from_dir(self):
         raise NotImplementedError()
@@ -89,13 +97,21 @@ class SOFADataset(Dataset):
         raise NotImplementedError()
 
     def _get_locations_from_one_sofa(self, path):
-        self.locations = sofa.Database.open(path).Source.Position.get_values(system="spherical")
-        self.locations = self.locations[:, :2]
-        self.locations[:, 0] = (self.locations[:, 0] + 360) % 360
-        self.locations_tensor = np.array(self.locations)
-        self.locations = list(map(location2degree, self.locations.tolist()))
+        locations = sofa.Database.open(path).Source.Position.get_values(system="spherical")
+        locations = locations[:, :2]
+        locations[:, 0] = (locations[:, 0] + 360) % 360
+        self.locations_tensor = np.array(locations)
+        locations = list(map(location2degree, locations.tolist()))
         self.r2l_indices = transR2L(self.locations_tensor)
-        return self.locations_tensor
+        self.locations = locations
+        return self.locations_tensor, locations
+    
+    def _get_locations_from_all_sofa(self, paths):
+        self.all_locations = {} # dict of list 
+        for path in paths:
+            _, locations = self._get_locations_from_one_sofa(path)
+            if len(locations) not in self.all_locations:
+                self.all_locations[len(locations)] = locations
 
     def _get_location_from_locidx(self, locidx):
         return self.location_dict.inverse[locidx][0]
@@ -259,7 +275,7 @@ class SOFADataset(Dataset):
             if orig_sr == 44100:
                 irs.append(np.array(orig_ir))
             else:  # resample 44100
-                irs.append(librosa.resample(orig_ir, int(orig_sr), 44100))
+                irs.append(librosa.resample(orig_ir, orig_sr=int(orig_sr), target_sr=44100))
         return locations, np.array(irs)
 
 
@@ -302,6 +318,7 @@ class ITA(SOFADataset):
         super(ITA, self).__init__()
         self.name = "ita"
         self.sofa_dir = os.path.join(DATASET_PATH, "ITA/SOFA")
+        print(self.sofa_dir)
         self._expand_basic_info()
 
     def _get_all_sofa_files_from_dir(self):
@@ -486,8 +503,17 @@ if __name__ == "__main__":
     # print(len(hutubs))
     # for i in range(len(hutubs)):
     #     hrtf, subject, freq, left_or_right = hutubs[i]
-    master_dataset = SOFADataset()
-    master_dataset._sanity_check()
+    
+    
+    ari = ARI()
+    print(len(ari))
+    # for i in range(len(ari)):
+    #      hrtf, subject = ari[i]
+    hrtf, subject = ari[0]
+    print(len(ari.location_dict))
+    # fig, ax = plt.subplots()
+    
+    # master_dataset._plot_frontal_HRTF(1, 'left', ax)
 
 
 
