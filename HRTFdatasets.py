@@ -96,7 +96,6 @@ class HRTFDataset(Dataset):
         # tf = tf[:, 3:93]   # 500 Hz to 16kHz contribute to localization and are equalized
         ## how to normalize
         ## first way is to devide by max value
-
         if norm_way == 0:
             tf = tf / np.max(tf)
         ## second way is to devide by top 5% top value
@@ -229,7 +228,7 @@ class HRTFDataset(Dataset):
     def __getitem__(self, idx):
         location, hrtf = self._get_hrtf(idx, self.freq, self.scale, self.norm_way)
         # return location, hrtf / self.max_mag
-        return location, hrtf
+        return location, hrtf, self.ITD_dict[idx]
 
     def _plot_frontal_data(self, idx, ax):
         loc_idx = self.dataset_obj._get_frontal_locidx()
@@ -387,11 +386,12 @@ class MergedHRTFDataset(Dataset):
             self.all_datasets[dataset_name] = HRTFDataset(dataset_name, freq, scale, norm_way, self.norm_factor)
         for dataset in self.all_datasets.values():
             for item_idx in range(len(dataset)):
-                locs, hrtfs = dataset[item_idx]
+                locs, hrtfs, ITD_array = dataset[item_idx]
                 self.all_data.append((locs, hrtfs, dataset.name, 
                                       np.array(dataset.hrtf_normalized),
                                       np.array(dataset.hrtf_normalized_all_loc),
-                                      dataset.hrtf_normalized_common_loc))
+                                      dataset.hrtf_normalized_common_loc,
+                                      ITD_array))
             self.length_array.append(len(dataset))
         # self.length_sum = np.insert(np.cumsum(self.length_array), 0, 0)
         
@@ -411,7 +411,7 @@ class MergedHRTFDataset(Dataset):
     def __len__(self):
         return np.sum(self.length_array)
 
-    def extend_locations(self, locs, hrtfs):
+    def extend_locations(self, locs, hrtfs, ITD_array):
         ## Extend locations from -30 to 0 and from 360 to 390
         index1 = np.where(locs[:, 0] > 330)
         new_locs1 = locs.copy()[index1]
@@ -430,12 +430,17 @@ class MergedHRTFDataset(Dataset):
         new_hrtfs[new_locs1.shape[0]:-new_locs2.shape[0]] = torch.from_numpy(hrtfs)
         new_hrtfs[:new_locs1.shape[0]] = torch.from_numpy(hrtfs.copy()[index1])
         new_hrtfs[-new_locs2.shape[0]:] = torch.from_numpy(hrtfs.copy()[index2])
-        return new_locs, new_hrtfs
+        # assign values for ITDs
+        new_ITDs = torch.zeros(num_loc)
+        new_ITDs[new_locs1.shape[0]:-new_locs2.shape[0]] = torch.from_numpy(ITD_array)
+        new_ITDs[:new_locs1.shape[0]] = torch.from_numpy(ITD_array.copy()[index1])
+        new_ITDs[-new_locs2.shape[0]:] = torch.from_numpy(ITD_array.copy()[index2])
+        return new_locs, new_hrtfs, new_ITDs
 
     def __getitem__(self, idx):
-        locs, hrtfs, names, normalized_hrtf, normalized_hrtf_all_loc, normalized_hrtf_common_loc = self.all_data[idx]
-        locs, hrtfs = self.extend_locations(locs, hrtfs)
-        return locs, hrtfs, names
+        locs, hrtfs, names, _, _, _, ITD_array = self.all_data[idx]
+        locs, hrtfs, ITD_array = self.extend_locations(locs, hrtfs, ITD_array)
+        return locs, hrtfs, ITD_array, names
         # return locs, hrtfs, names, normalized_hrtf, normalized_hrtf_all_loc, normalized_hrtf_common_loc
 
     def collate_fn(self, samples):
@@ -503,7 +508,7 @@ class PartialHRTFDataset(MergedHRTFDataset):
         return 210
 
     def __getitem__(self, idx):
-        locs, hrtfs, names = self.all_data[idx]
+        locs, hrtfs, _, names = self.all_data[idx]
         indices = np.array([  0,   2,   4,   6,   8,  10,  12,  14,  16,  18,  20,  22,  24,
         26,  28,  30,  32,  34,  36,  38,  40,  42,  44,  46,  48,  50,
         52,  54,  56,  58,  60,  62,  64,  66,  68,  70,  73,  75,  77,
@@ -578,7 +583,7 @@ def fitting_dataset_wrapper(idx, dataset="crossmod", freq=1, part="full"):
 
 
 if __name__ == "__main__":
-    res = HRTFDataset(dataset='crossmod')
+    res = HRTFDataset(dataset='ari')
 
     # print(res.ITD_dict)
     # fig, ax = plt.subplots()
@@ -587,10 +592,12 @@ if __name__ == "__main__":
     # res._set_ax(ax)
     
     # no ita, sadie, ari
+    '''
     datasets = MergedHRTFDataset(["3d3a", "ita", "sadie", "ari",
                                   "riec", "bili", "hutubs", "listen",
                                   "crossmod", "cipic"],
                                  freq=15)
+    '''
     # datasets.plot_normalized_hrtfs()
     '''
     for i in range(12):

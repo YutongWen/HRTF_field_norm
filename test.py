@@ -9,7 +9,8 @@ A = [
 A = np.array(A)
 B = [2, 3, 2, 2]
 B = np.array(B)
-
+B = B[[0, 1, 3]]
+print(B)
 '''
 # B = 2**B
 A = np.subtract(A, B)
