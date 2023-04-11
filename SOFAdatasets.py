@@ -138,7 +138,7 @@ class SOFADataset(Dataset):
         :return:
         """
         subject_idx = self._get_subject_idx(subject_ID)
-        return self.num_of_subjects * which_ear + subject_idx
+        return which_ear + subject_idx * 2
 
     def __len__(self):
         return self.num_of_ears  # left and right
@@ -173,7 +173,7 @@ class SOFADataset(Dataset):
         if orig_sr == 44100:
             return orig_ir
         else:   # resample 44100
-            return librosa.resample(orig_ir, int(orig_sr), 44100)
+            return librosa.resample(orig_ir, orig_sr=int(orig_sr), target_sr=44100)
 
     def _sanity_check(self):
         for key in list(self.__dir__()):

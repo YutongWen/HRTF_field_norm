@@ -17,10 +17,12 @@ class HRTFDataset(Dataset):
                         "listen": "Listen", "crossmod": "Crossmod", "sadie": "SADIE"}
         self.name = dataset
         self.dataset_obj = getattr(SOFAdatasets, dataset_dict[self.name])()
+        # print(self.dataset_obj.subject_dict)
         self.freq = freq
         self.scale = scale
         self.norm_way = norm_way
         self.hrtf_norm_factor = hrtf_norm_factor
+        self._create_ITD_dict()
         self._normalize_hrtf_common_loc()
         self._normalize_hrtf()
         # print(self.hrtf_normalized)
@@ -30,6 +32,60 @@ class HRTFDataset(Dataset):
 
     def __len__(self):
         return self.dataset_obj.__len__()
+    
+    def _create_ITD_dict(self):
+        # ITD for one ear (seen as left ear is left_arrival_time - right_arrival_time)
+        sr = 44100.0
+        time_increment = 1/sr # unit is seconds
+        self.ITD_dict = {} # maps subject_idx to its ITD at all loc, len(subject_idx) = 2 * num of people
+        for subject_ID in self.dataset_obj.subject_IDs:
+            L_idx = self.dataset_obj._get_ear_ID(subject_ID, 0)
+            R_idx = self.dataset_obj._get_ear_ID(subject_ID, 1)
+            # print(f'L id is {L_idx}, R id is {R_idx}')
+            L_irs = np.abs(self._get_hrir(L_idx))
+            R_irs = np.abs(self._get_hrir(R_idx))
+            L_peaks = np.argmax(L_irs, axis=1)
+            R_peaks = np.argmax(R_irs, axis=1)
+            try:
+                L_ITDs = (L_peaks - R_peaks) * time_increment
+                R_ITDs = (R_peaks - L_peaks) * time_increment
+                self.ITD_dict[L_idx] = L_ITDs
+                self.ITD_dict[R_idx] = R_ITDs
+            except Exception as e:
+                print(e, f'in {self.name}')
+        '''
+        index = 0
+        for path in self.dataset_obj.all_sofa_files:
+            # raw subject_ID, length is the num of people
+            # hrir sample rate is 44100
+            _, locations = self.dataset_obj._get_locations_from_one_sofa(path)
+            ear_L_peak_idxs = np.array([0] * len(locations))
+            ear_R_peak_idxs = np.array([0] * len(locations))
+            for loc in locations:
+                # each loc is a tuple
+                ear_L_hrir_single_loc = np.abs(self.dataset_obj._get_HRIR(self.dataset_obj.subject_IDs[index], loc, 'left'))
+                ear_R_hrir_single_loc = np.abs(self.dataset_obj._get_HRIR(self.dataset_obj.subject_IDs[index], loc, 'right'))
+                loc_idx = self.dataset_obj.all_location_dict[len(locations)][loc]
+                L_peak_idx = np.argmax(ear_L_hrir_single_loc)
+                R_peak_idx = np.argmax(ear_R_hrir_single_loc)
+                ear_L_peak_idxs[loc_idx] = L_peak_idx
+                ear_R_peak_idxs[loc_idx] = R_peak_idx
+            try:
+                L_ITDs = (ear_L_peak_idxs - ear_R_peak_idxs) * time_increment
+                R_ITDs = (ear_R_peak_idxs - ear_L_peak_idxs) * time_increment
+                self.ITD_dict.append(L_ITDs)
+                self.ITD_dict.append(R_ITDs)
+            except Exception as e:
+                print(e, f'in {self.name}')
+            index += 1
+        '''
+                
+            
+    def _get_hrir(self, idx):
+        with open(os.path.join("/data2/neil/HRTF/prepocessed_hrirs", "%s_%03d.pkl" % (self.name, idx)), 'rb') as handle:
+            _, hrir = pkl.load(handle)
+        return hrir
+            
 
     def _get_hrtf(self, idx, freq, scale="linear", norm_way=0):
         # location, hrir = self.dataset_obj[idx]
@@ -227,7 +283,7 @@ class HRTFDataset(Dataset):
             normalization_factor = 0
             azimuth = 30 * i
             hrtf_normalized_single_loc = [0.0] * len(hrtf[0])
-            for idx in self.dataset_obj.subject_dict.values():
+            for idx in range(self.__len__()):
                 _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
                 loc_key = hrtf.shape[0]
                 normalization_factor += 1
@@ -272,7 +328,7 @@ class HRTFDataset(Dataset):
             for key, value in self.dataset_obj.all_location_dict.items():
                 self.hrtf_normalized_all_loc[key] = np.array([[0.0] * len(hrtf[0])] * len(value))
             # self.hrtf_normalized_all_loc = np.array([[0.0] * len(hrtf[0])] * len(self.dataset_obj.location_dict))
-            for idx in self.dataset_obj.subject_dict.values():
+            for idx in range(self.__len__()):
                 _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
                 loc_key = hrtf.shape[0]
                 normalization_factor += 1
@@ -299,7 +355,7 @@ class HRTFDataset(Dataset):
                     if key not in loc_norm_dict:
                         loc_norm_dict[key] = np.array([[0.0] * len(hrtf[0])])
                         normalization_factor[key] = 0
-            for idx in self.dataset_obj.subject_dict.values():
+            for idx in range(self.__len__()):
                 _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
                 loc_key = hrtf.shape[0]
                 for key in self.dataset_obj.all_location_dict[loc_key].keys():
@@ -523,7 +579,9 @@ def fitting_dataset_wrapper(idx, dataset="crossmod", freq=1, part="full"):
 
 if __name__ == "__main__":
     res = HRTFDataset(dataset='crossmod')
-    fig, ax = plt.subplots()
+
+    # print(res.ITD_dict)
+    # fig, ax = plt.subplots()
     # res._plot_frontal_data(1, ax)
     # res._plot_normalized_hrtf(ax)
     # res._set_ax(ax)

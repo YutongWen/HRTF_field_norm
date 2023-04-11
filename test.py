@@ -1,9 +1,9 @@
 import numpy as np
 
 A = [
-    [3, 3, 3, 3],
-    [3, 3, 3, 3],
-    [3, 3, 3, 3]
+    [4, 3, 3, 3],
+    [3, 4, 3, 3],
+    [3, 3, 3, 4]
 ]
 
 A = np.array(A)
@@ -23,6 +23,6 @@ print(C+D)
 E = {2:0, 4:0, 3:0}
 print(sorted(E.keys()))
 
-A[2] = B
 print(A)
-
+peak_indices = np.argmax(A, axis=1)
+print(type(peak_indices))
