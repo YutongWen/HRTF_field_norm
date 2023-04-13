@@ -2,7 +2,7 @@ import numpy as np
 
 A = [
     [4, 3, 3, 3],
-    [3, 4, 3, 3],
+    [3, 2, 3, 3],
     [3, 3, 3, 4]
 ]
 
@@ -26,4 +26,6 @@ print(sorted(E.keys()))
 
 print(A)
 peak_indices = np.argmax(A, axis=1)
-print(type(peak_indices))
+peak = np.max(A, axis=1)
+A = A/peak[:,None]
+print(A)

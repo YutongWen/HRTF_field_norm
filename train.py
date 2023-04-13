@@ -327,7 +327,7 @@ def run(args):
     # Original HRTF
     for j in range(10):
         rand_idx = np.random.randint(len(trainDataset))
-        loc, hrtf, name = trainDataset[rand_idx]
+        loc, hrtf, _, name = trainDataset[rand_idx]
         if args.scale == "log":
             hrtf = np.power(10, hrtf / 20)
         fig = plot_hrtf_3D(loc, hrtf, "Original%03d_%s" % (rand_idx, name), args.out_fold)

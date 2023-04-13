@@ -56,16 +56,18 @@ compute = 'add'
 
 
 all_names = ["ari", "hutubs", "3d3a", "bili", "listen", "crossmod", "sadie", "riec"]
-dataset = MergedHRTFDataset(all_names, "all", "log", norm_way=-1)
+dataset = MergedHRTFDataset(all_names, "all", "log", norm_way=4)
 
 X_all = []
 y_all = []
 for item in dataset:
     loc, hrtf, _, name = item
     index = np.where((loc[:, 1] == 0) & np.isin(loc[:, 0], [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]))[0] # , 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330
+    # index = np.where(loc[:, 0] == 0)[0]
 #     if hrtf[index, :].flatten().numpy().shape[0] != 1104:
 #         print(name)
     hrtf = hrtf[index,:]
+    '''
     for azimuth_id in range(12):
         if scale_choice[scale] == 1:
             hrtf_norm = 20 * np.log10(np.array(dataset.all_datasets[name].hrtf_normalized_common_loc[azimuth_id]))
@@ -82,6 +84,8 @@ for item in dataset:
         else:
             hrtf[azimuth_id] = np.divide(hrtf[azimuth_id], hrtf_norm)
             hrtf[azimuth_id] = np.multiply(hrtf[azimuth_id], hrtf_norm_factor)
+    '''
+    
     
     X_all.append(hrtf.float().flatten().numpy())
     y_all.append(all_names.index(name))
@@ -110,6 +114,8 @@ fig1, ax = plt.subplots()
 df_cm = DataFrame(matrix, index=all_names, columns=all_names)
 sn.heatmap(df_cm, cmap='Oranges', annot=True, ax=ax)
 
+
+
 fig2, axs = plt.subplots(3, 4, sharex=True, sharey=True, figsize=(16, 12))
 fig2.suptitle(f'Confusion Matrix for Normalized HRTF at Different Locations Linear SVM\nchoice of {scale}, {compute}, train test the same is {train_test_is_same}')
 
@@ -122,14 +128,14 @@ for azimuth, ax, ax_fig3 in zip([0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 30
     X_all = []
     y_all = []
     # azimuth = 30
-    for indx in range(0, len(dataset)):
+    for indx in range(0, len(dataset), 2):
         item = dataset[indx]
         loc, hrtf, _, name = item # hrtf is 20 log10
         index = np.where((loc[:, 1] == 0) & np.isin(loc[:, 0], [azimuth]))[0]
         # index = np.where((loc[:, 1] == 0) & np.isin(loc[:, 0], [30]))[0]
     #     if hrtf[index, :].flatten().numpy().shape[0] != 1104:
     #         print(name)
-        
+        '''
         if train_test_is_same:
             if scale_choice[scale] == 1:
                 hrtf_norm = 20 * np.log10(np.array(dataset.all_datasets[name].hrtf_normalized_common_loc[azimuth_id]))
@@ -147,7 +153,7 @@ for azimuth, ax, ax_fig3 in zip([0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 30
             else:
                 hrtf = np.divide(hrtf, hrtf_norm)
                 hrtf = np.multiply(hrtf, hrtf_norm_factor)
-
+        '''
         X_all.append(hrtf[index, :].float().flatten().numpy())
         y_all.append(all_names.index(name))
     X_all = np.stack(X_all)
