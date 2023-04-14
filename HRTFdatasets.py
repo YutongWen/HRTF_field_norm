@@ -208,9 +208,33 @@ class HRTFDataset(Dataset):
             test_hrtf /= np.max(test_hrtf)
             '''
             
-            
+        elif norm_way == 5:
+            tf = 20 * np.log10(tf)
+            tf_norm = 20 * np.log10(self.hrtf_normalized)
+            # hrtf_norm = np.array(self.hrtf_normalized)
+            try:
+                tf -= tf_norm
+                if self.hrtf_norm_factor is not None:
+                    hrtf_norm_factor = 20 * np.log10(self.hrtf_norm_factor)
+                    tf = np.add(tf, hrtf_norm_factor)
+            except ValueError:
+                print('ValueError, location points doesn"t match')
+            tf = 10**(tf/20)
             
             # tf /= np.max(tf) # normalize between zero
+        elif norm_way == 6:
+            loc_key = tf.shape[0]
+            tf = 20 * np.log10(tf)
+            tf_norm = 20 * np.log10(self.hrtf_normalized_all_loc[loc_key])
+            # hrtf_norm = np.array(self.hrtf_normalized)
+            try:
+                tf -= tf_norm
+                if self.hrtf_norm_factor is not None:
+                    hrtf_norm_factor = 20 * np.log10(self.hrtf_norm_factor)
+                    tf = np.add(tf, hrtf_norm_factor)
+            except ValueError:
+                print('ValueError, location points doesn"t match')
+            tf = 10**(tf/20)
         else:
             pass
 
@@ -333,10 +357,12 @@ class HRTFDataset(Dataset):
             _, hrtf = self._get_hrtf(0, "all", "linear")
             self.hrtf_normalized_all_loc_L = {} # dict of np.array
             self.hrtf_normalized_all_loc_R = {} # dict of np.array
+            self.hrtf_normalized_all_loc = {}
             normalization_factor = 0 
             for key, value in self.dataset_obj.all_location_dict.items():
                 self.hrtf_normalized_all_loc_L[key] = np.array([[0.0] * len(hrtf[0])] * len(value))
                 self.hrtf_normalized_all_loc_R[key] = np.array([[0.0] * len(hrtf[0])] * len(value))
+                self.hrtf_normalized_all_loc[key] = np.array([[0.0] * len(hrtf[0])] * len(value))
             # self.hrtf_normalized_all_loc = np.array([[0.0] * len(hrtf[0])] * len(self.dataset_obj.location_dict))
             for idx in range(self.__len__()):
                 _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
@@ -346,6 +372,7 @@ class HRTFDataset(Dataset):
                 # hrtf = hrtf/np.max(hrtf)
                 loc_key = hrtf.shape[0]
                 try:
+                    self.hrtf_normalized_all_loc[loc_key] += hrtf
                     if (idx % 2) == 0: # left ear
                         normalization_factor += 1
                         self.hrtf_normalized_all_loc_L[loc_key] += hrtf
@@ -358,6 +385,7 @@ class HRTFDataset(Dataset):
             for key in self.hrtf_normalized_all_loc_L.keys():
                 self.hrtf_normalized_all_loc_L[key] /= normalization_factor
                 self.hrtf_normalized_all_loc_R[key] /= normalization_factor
+                self.hrtf_normalized_all_loc[key] /= (normalization_factor * 2)
         else:
             # if len(self.dataset_obj.all_location_dict) > 1
             
@@ -365,17 +393,21 @@ class HRTFDataset(Dataset):
             normalization_factor = {} # dict of int for different location tuples
             loc_norm_dict_L = {} # dict contains all possible loc in the dataset
             loc_norm_dict_R = {}
+            loc_norm_dict = {}
             self.hrtf_normalized_all_loc_L = {} # dict of np.array
             self.hrtf_normalized_all_loc_R = {}
+            self.hrtf_normalized_all_loc = {}
             for key, value in self.dataset_obj.all_location_dict.items():
                 self.hrtf_normalized_all_loc_L[key] = np.array([[0.0] * len(hrtf[0])] * len(value))
                 self.hrtf_normalized_all_loc_R[key] = np.array([[0.0] * len(hrtf[0])] * len(value))
+                self.hrtf_normalized_all_loc[key] = np.array([[0.0] * len(hrtf[0])] * len(value))
             for value in self.dataset_obj.all_location_dict.values():
                 # value is a dict maps from loc tuple to loc_id
                 for key in value.keys():
                     if key not in loc_norm_dict_L:
                         loc_norm_dict_L[key] = np.array([[0.0] * len(hrtf[0])])
                         loc_norm_dict_R[key] = np.array([[0.0] * len(hrtf[0])])
+                        loc_norm_dict[key] = np.array([[0.0] * len(hrtf[0])])
                         normalization_factor[key] = 0
             for idx in range(self.__len__()):
                 _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
@@ -386,6 +418,7 @@ class HRTFDataset(Dataset):
                 for key in self.dataset_obj.all_location_dict[loc_key].keys():
                     # each key is a tuple of location
                     loc_idx = self.dataset_obj.all_location_dict[loc_key][key]
+                    loc_norm_dict[key] += hrtf[loc_idx]
                     if (idx % 2) == 0: # left ear
                         loc_norm_dict_L[key] += hrtf[loc_idx]
                         normalization_factor[key] += 1
@@ -394,6 +427,7 @@ class HRTFDataset(Dataset):
             for key in loc_norm_dict_L.keys():
                 loc_norm_dict_L[key] /= normalization_factor[key] 
                 loc_norm_dict_R[key] /= normalization_factor[key] 
+                loc_norm_dict[key] /= (normalization_factor[key] * 2)
             for key, value in loc_norm_dict_L.items():
                 # key is tuple of location, value is np array of normalized hrtf
                 for key_j, value_j in self.dataset_obj.all_location_dict.items():
@@ -406,6 +440,12 @@ class HRTFDataset(Dataset):
                     # key_j is location dim, value_j is dict maps from loc tuple to loc_id
                     if key in value_j:
                         self.hrtf_normalized_all_loc_R[key_j][value_j[key]] = value
+            for key, value in loc_norm_dict.items():
+                # key is tuple of location, value is np array of normalized hrtf
+                for key_j, value_j in self.dataset_obj.all_location_dict.items():
+                    # key_j is location dim, value_j is dict maps from loc tuple to loc_id
+                    if key in value_j:
+                        self.hrtf_normalized_all_loc[key_j][value_j[key]] = value
             
     
 
