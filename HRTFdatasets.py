@@ -7,6 +7,10 @@ import numpy as np
 import pickle as pkl
 import os
 from matplotlib import pyplot as plt
+import matplotlib
+from scipy.signal import minimum_phase
+from scipy.signal import hilbert
+
 
 
 class HRTFDataset(Dataset):
@@ -85,14 +89,55 @@ class HRTFDataset(Dataset):
         with open(os.path.join("/data2/neil/HRTF/prepocessed_hrirs", "%s_%03d.pkl" % (self.name, idx)), 'rb') as handle:
             _, hrir = pkl.load(handle)
         return hrir
-            
+           
+    def _get_mag_phase(self, idx, freq, scale='linear'):
+        with open(os.path.join("/data2/neil/HRTF/prepocessed_hrirs", "%s_%03d.pkl" % (self.name, idx)), 'rb') as handle:
+            location, hrir = pkl.load(handle)
+        '''
+        for i in range(len(hrir)):
+            hrir[i] = minimum_phase(hrir[i], method='hilbert')
+        '''
+        
+        ir = hrir[0]
+        fig, ax = plt.subplots()
+        ax.plot(ir, label=self.dataset_obj.name.upper()+" Subject%s" % self.dataset_obj._get_subject_ID(idx))
+        
+        
+        for i in range(len(hrir)):
+            hrir[i] = hilbert(hrir[i])
+            amp = np.abs(hrir[i])
+            phase = np.unwrap(np.angle(hrir[i]))
+            hrir[i] = np.real(np.fft.ifft(amp * np.exp(1j * phase)))
+        
+        ir = hrir[0]
+        fig, ax = plt.subplots()
+        ax.plot(ir, label=self.dataset_obj.name.upper()+" Subject%s" % self.dataset_obj._get_subject_ID(idx))
+        
+        
+        
+        
+        # hrir = minimum_phase(hrir, method='homomorphic')
+        tf_mag = np.abs(np.fft.fft(hrir, n=256))
+        tf_phase = np.angle(np.fft.fft(hrir, n=256))
+        tf_mag = tf_mag[:, 1:93]  # first 128 freq bins, but up to 16k
+        tf_phase = tf_phase[:, 1:93]
+        
+        if scale == "linear":
+            pass
+        elif scale == "log":
+            tf_mag = 20 * np.log10(tf_mag)
+        if freq == "all":
+            return location, tf_mag, tf_phase
+        return location, tf_mag[:, freq][:, np.newaxis], tf_phase[:, freq][:, np.newaxis]
 
     def _get_hrtf(self, idx, freq, scale="linear", norm_way=0):
         # location, hrir = self.dataset_obj[idx]
         with open(os.path.join("/data2/neil/HRTF/prepocessed_hrirs", "%s_%03d.pkl" % (self.name, idx)), 'rb') as handle:
             location, hrir = pkl.load(handle)
+        
         tf = np.abs(np.fft.fft(hrir, n=256))
-        tf = tf[:, 1:93]  # first 128 freq bins, but up to 16k
+        tf = tf[:, 1:105] # up to 18k
+        # tf = tf[:, 1:93]  # first 128 freq bins, but up to 16k
         # tf = tf[:, 3:93]   # 500 Hz to 16kHz contribute to localization and are equalized
         ## how to normalize
         ## first way is to devide by max value
@@ -209,8 +254,9 @@ class HRTFDataset(Dataset):
             '''
             
         elif norm_way == 5:
+            loc_key = tf.shape[0]
             tf = 20 * np.log10(tf)
-            tf_norm = 20 * np.log10(self.hrtf_normalized)
+            tf_norm = 20 * np.log10(self.hrtf_normalized_all_loc_mix[loc_key])
             # hrtf_norm = np.array(self.hrtf_normalized)
             try:
                 tf -= tf_norm
@@ -285,13 +331,70 @@ class HRTFDataset(Dataset):
                ylabel='Log Magnitude',
                xlabel='Frequency (Hz)')
         
+    def plot_hrtf_phase(self, idx, ax):
+        # _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
+        loc, _, phase = self._get_mag_phase(idx, "all", "linear")
+        index = np.where((loc[:, 1] == 0) & np.isin(loc[:, 0], [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]))[0]
+        x, y = np.meshgrid(list(range(phase.shape[1])), list(range(len(index))))
+        phase = phase[index]
+        # hrtf_at_loc = hrtf_at_loc/np.max(hrtf_at_loc) 
+        # hrtf = hrtf / self.max_mag # normalization
+        # ax.plot_wireframe(x, y, phase, rstride=10, cstride=0)
+        ax.plot_surface(x, y, phase)
+        # ax.plot(phase_at_loc, label=self.dataset_obj.name.upper()+" Subject%s" % self.dataset_obj._get_subject_ID(idx))
+        '''
+        ax.set(xticks=list(np.arange(0, 128 + 16, 16)),
+               xticklabels=['{:,.2f}k'.format(x) for x in list(np.arange(0, 128 + 16, 16) / 256 * 44.1)],
+               title=f"phase in {self.name} for subject {idx}",
+               ylabel='Magnitude',
+               xlabel='Frequency (Hz)',
+               zlabel='loc')
+        '''
+        
+    def plot_hrtf_phase_at_loc(self, idx, loc, ax):
+        # _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
+        loc_idx = self.dataset_obj._get_locidx_from_location(loc)
+        _, _, phase = self._get_mag_phase(idx, "all", "linear")
+        phase_at_loc = phase[loc_idx]
+        # hrtf_at_loc = hrtf_at_loc/np.max(hrtf_at_loc) 
+        # hrtf = hrtf / self.max_mag # normalization
+        ax.plot(phase_at_loc, label=self.dataset_obj.name.upper()+" Subject%s" % self.dataset_obj._get_subject_ID(idx))
+        ax.set(xticks=list(np.arange(0, 128 + 16, 16)),
+               xticklabels=['{:,.2f}k'.format(x) for x in list(np.arange(0, 128 + 16, 16) / 256 * 44.1)],
+               title=f"phase at loc {loc} in {self.name}",
+               ylabel='Log Magnitude',
+               xlabel='Frequency (Hz)')
+        
     def _plot_normalized_hrtf(self, ax):
         ax.plot(20 * np.log10(self.hrtf_normalized), label='normalized hrtf')
         ax.set(title=f"{self.name}")
         
+    def _plot_normalized_hrtf_common_loc(self, ax):
+        self._set_ax(ax)
+        for i in range(12):
+            self._plot_normalized_hrtf_at_loc(i, ax)
+        
     def _plot_normalized_hrtf_at_loc(self, loc_id, ax):
-        ax.plot(20 * np.log10(self.hrtf_normalized_common_loc[loc_id]), label='normalized hrtf')
-        ax.set(title=f"{self.name}")
+        x = np.arange(0, 128)
+        x = x / 256 * 44100
+        x = x[1:105]
+        ax.plot(x, 20 * np.log10(self.hrtf_normalized_common_loc[loc_id]), label=f'{self.name.upper()}')
+        # ax.set(title=f"{self.name}")
+        
+    def _plot_normalized_hrtf_all_loc(self, ax):
+        _, hrtf = self._get_hrtf(0, "all", "linear")
+        norm_all_loc = np.array([0.0] * len(hrtf[0]))
+        print(norm_all_loc.shape)
+        for tfs in self.hrtf_normalized_all_loc.values():
+            for tf in tfs:
+                norm_all_loc += tf
+            length = len(tfs)
+            break
+        norm_all_loc /= length
+        x = np.arange(0, 128)
+        x = x / 256 * 44100
+        x = x[1:105]
+        ax.plot(x, 20 * np.log10(self.hrtf_normalized), label=f'{self.name.upper()}')
         
     def _set_ax(self, ax):
         ax.set(xticks=list(np.arange(0, 128 + 16, 16)),
@@ -446,6 +549,9 @@ class HRTFDataset(Dataset):
                     # key_j is location dim, value_j is dict maps from loc tuple to loc_id
                     if key in value_j:
                         self.hrtf_normalized_all_loc[key_j][value_j[key]] = value
+        self.hrtf_normalized_all_loc_mix = {}
+        for key, value in self.hrtf_normalized_all_loc.items():
+            self.hrtf_normalized_all_loc_mix[key] = np.mean(value, axis=0)
             
     
 
@@ -553,25 +659,105 @@ class MergedHRTFDataset(Dataset):
             plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment='right')
         for ax in axs.flat:
             ax.label_outer()
+        
+    def plot_normalized_hrtf_all_loc(self):
+        fig, ax = plt.subplots(figsize=(8, 4))
+        plt.xscale("log")
+        font = {'size': 14}  
+        matplotlib.rc('font', **font)
+        # fig.suptitle('System Frequency Response')
+        for dataset in self.all_datasets.values():
+            dataset._plot_normalized_hrtf_all_loc(ax)
+        # xticks=list(np.arange(0, 128 + 16, 16)
+        
+        ax.set(xticks= [250, 500, 1000, 2000, 4000, 8000, 16000],
+           xticklabels=['{:,.2f}k'.format(x/1000) for x in [250, 500, 1000, 2000, 4000, 8000, 16000]],
+           xlim=[172, 17916])
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.tick_params(axis='both', which='minor', labelsize=14)
+        ax.set_xlabel('Frequency (Hz)', fontsize=14)
+        ax.set_ylabel('Log Magnitude (dB)', fontsize=14)
+        # plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment='right')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.savefig('system_freq_response.pdf', dpi=500, bbox_inches='tight')
             
-    def plot_normalized_hrtfs_at_loc(self, loc_id=0):
-        fig, axs = plt.subplots(4, 2, sharex=True, sharey=True, figsize=(10, 13))
-        azimuth = loc_id * 30
-        fig.suptitle(f'Normalized HRTF at location ({azimuth}, 0)')
+    def plot_normalized_hrtfs_at_locs(self, loc_id_a=0, loc_id_b=1):
+        fig, axs = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(12, 5))
+        plt.xscale('log')
+        font = {'size': 16}  
+        matplotlib.rc('font', **font)
+        # fig.suptitle(f'Normalized HRTF at location ({azimuth_a}, 0)')
         index = 0
         for i in range(4):
             for j in range(2):
-                self.all_datasets[self.all_dataset_names[index]]._plot_normalized_hrtf_at_loc(loc_id, axs[i, j])
+                self.all_datasets[self.all_dataset_names[index]]._plot_normalized_hrtf_at_loc(loc_id_a, axs[0])
+                self.all_datasets[self.all_dataset_names[index]]._plot_normalized_hrtf_at_loc(loc_id_b, axs[1])
                 index += 1
         for ax in axs.flat:
-            ax.set(xticks=list(np.arange(0, 128 + 16, 16)),
-               xticklabels=['{:,.2f}k'.format(x) for x in list(np.arange(0, 128 + 16, 16) / 256 * 44.1)],
-               ylabel='Log Magnitude',
-               xlabel='Frequency (Hz)')
-            plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment='right')
+            ax.set(xticks= [250, 1000, 4000, 16000],
+                xticklabels=['{:,.2f}k'.format(x/1000) for x in [250, 1000, 4000, 16000]],
+                xlim=[172, 17916])
+            ax.tick_params(axis='both', which='major', labelsize=16)
+            ax.tick_params(axis='both', which='minor', labelsize=16)
+            ax.set_xlabel('Frequency (Hz)', fontsize=16)
+            ax.set_ylabel('Log Magnitude (dB)', fontsize=16)
+            # plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment='right')
         for ax in axs.flat:
             ax.label_outer()
-    
+        plt.legend(bbox_to_anchor=(1.05, 0.8), loc='upper left')
+        plt.savefig('system_freq_response.pdf', dpi=500, bbox_inches='tight')
+            
+    def plot_dataset_loc_diff(self, name_a, name_b, loc_A, loc_B):
+        dataset_a = self.all_datasets[name_a]
+        dataset_b = self.all_datasets[name_b]
+        loc_idx_A_a = dataset_a.dataset_obj._get_locidx_from_location(loc_A)
+        loc_idx_A_b = dataset_b.dataset_obj._get_locidx_from_location(loc_A)
+        loc_idx_B_a = dataset_a.dataset_obj._get_locidx_from_location(loc_B)
+        loc_idx_B_b = dataset_b.dataset_obj._get_locidx_from_location(loc_B)
+        # avg_hrtf_A_a and avg_hrtf_A_b
+        _, hrtf = dataset_a._get_hrtf(0, "all", "linear")
+        hrtf_avg_A_a = np.array([0.0] * len(hrtf[0]))
+        hrtf_avg_B_a = np.array([0.0] * len(hrtf[0]))
+        count = 0
+        for idx in range(dataset_a.__len__()):
+            _, hrtfs = dataset_a._get_hrtf(idx, "all", "linear", -1)
+            hrtf_avg_A_a += hrtfs[loc_idx_A_a]
+            hrtf_avg_B_a += hrtfs[loc_idx_B_a]
+            count += 1
+        hrtf_avg_A_a /= count
+        hrtf_avg_B_a /= count
+        
+        hrtf_avg_A_b = np.array([0.0] * len(hrtf[0]))
+        hrtf_avg_B_b = np.array([0.0] * len(hrtf[0]))
+        count = 0
+        for idx in range(dataset_b.__len__()):
+            _, hrtfs = dataset_b._get_hrtf(idx, "all", "linear", -1)
+            hrtf_avg_A_b += hrtfs[loc_idx_A_b]
+            hrtf_avg_B_b += hrtfs[loc_idx_B_b]
+            count += 1
+        hrtf_avg_A_b /= count
+        hrtf_avg_B_b /= count
+        
+        hrtf_avg_A_a_b = 20 * np.log10(hrtf_avg_A_a / hrtf_avg_A_b)
+        hrtf_avg_B_a_b = 20 * np.log10(hrtf_avg_B_a / hrtf_avg_B_b)
+        
+        x = np.arange(0, 128)
+        x = x / 256 * 44100
+        x = x[1:105]
+        fig, ax = plt.subplots(figsize=(8, 4))
+        plt.xscale("log")
+        ax.plot(x, hrtf_avg_A_a_b, label=f'log difference from {name_a} to {name_b} at loc {loc_A}')
+        ax.plot(x, hrtf_avg_B_a_b, label=f'log difference from {name_a} to {name_b} at loc {loc_B}')
+        ax.set(xticks= [250, 500, 1000, 2000, 4000, 8000, 16000],
+           xticklabels=['{:,.2f}k'.format(x/1000) for x in [250, 500, 1000, 2000, 4000, 8000, 16000]],
+           xlim=[172, 17916])
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.tick_params(axis='both', which='minor', labelsize=14)
+        ax.set_xlabel('Frequency (Hz)', fontsize=14)
+        ax.set_ylabel('Log Magnitude (dB)', fontsize=14)
+        plt.legend()
+        plt.savefig('system_response_loc_diff.pdf', dpi=500, bbox_inches='tight')
+        
     def get_dataset_normalized_hrtf(self, name='riec'):
         return np.array(self.all_datasets[name].hrtf_normalized)
 
@@ -659,26 +845,42 @@ def fitting_dataset_wrapper(idx, dataset="crossmod", freq=1, part="full"):
 
 
 if __name__ == "__main__":
+    '''
     res = HRTFDataset(dataset='hutubs')
-    print(len(res))
+    fig, ax = plt.subplots()
+    fig.suptitle(f'{res.name} Frequency Response at Tewlve Source Positions')
+    res._plot_normalized_hrtf_common_loc(ax)
+    plt.legend()
+    '''
+    # rint(len(res))
     # print(res.ITD_dict)
+    '''
     fig, axs = plt.subplots(4, 4, sharex=True, sharey=True, figsize=(15, 15))
     axs = axs.flat
     for id in range(0, len(res)):
         if id > 15:
             break
         res._plot_data_at_loc(id, (270, 0), axs[id])
-    
+    '''
+    # fig, ax = plt.subplots(figsize=(8, 12), subplot_kw={'projection': '3d'})
+    # res.plot_hrtf_phase(0, ax)
+    # fig, ax = plt.subplots()
+    # res.plot_hrtf_phase_at_loc(0, (0, 0), ax)
     # res._plot_frontal_data(1, ax)
     # res._plot_normalized_hrtf(ax)
     # res._set_ax(ax)
     
     # no ita, sadie, ari
-    '''
-    datasets = MergedHRTFDataset(["3d3a", "ita", "sadie", "ari",
-                                  "riec", "bili", "hutubs", "listen",
-                                  "crossmod", "cipic"],
+    
+    datasets = MergedHRTFDataset(["ari", "bili", "crossmod", 
+                                  "hutubs", "listen", "riec", 
+                                  "sadie", "3d3a"],
                                  freq=15)
+    # datasets.plot_normalized_hrtf_all_loc()
+    datasets.plot_normalized_hrtfs_at_locs(0, 3)
+    '''
+    for key, value in datasets.all_datasets.items():
+        print(f'{key} has {len(value)} samples')
     '''
     # datasets.plot_normalized_hrtfs()
     '''
