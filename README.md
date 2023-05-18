@@ -1,11 +1,12 @@
 # HRTF_field_norm
 # how to train
 
-norm way 4 is proposed
-norm way 5 is mix_pos_mix_ear
-norm way 6 is mix_ear_individual_pos
-norm way 2 is equator
+norm way 4 is proposed,
+norm way 5 is mix_pos_mix_ear, 
+norm way 6 is mix_ear_individual_pos, 
+norm way 2 is equator. 
 please modify the output folder to include the norm way info (-o dir)
+# experiments
 experiment 1
 ```bash
 python3 hrtf_normalization/train.py -o hrtf_normalization/exp1 -n listen crossmod sadie bili -t ari --norm_way 2
