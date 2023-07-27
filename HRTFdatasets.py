@@ -11,22 +11,6 @@ import matplotlib
 from scipy.signal import minimum_phase
 from scipy.signal import hilbert
 
-# how to train
-# norm way 4 is proposed
-# norm way 5 is mix_pos_mix_ear
-# norm way 6 is mix_ear_individual_pos
-# norm way 2 is equator
-# please modify the output folder to include the norm way info (-o dir)
-# exp4
-# python3 hrtf_normalization/train.py -o hrtf_normalization/exp4 -n hutubs 3d3a bili listen crossmod cipic ita sadie ari
-# exp1
-# python3 hrtf_normalization/train.py -o hrtf_normalization/exp1 -n listen crossmod sadie bili -t ari --norm_way 2
-# exp2
-# python3 hrtf_normalization/train.py -o hrtf_normalization/exp2 -n ari crossmod hutubs cipic -t riec --norm_way 2
-# exp3
-# python3 hrtf_normalization/train.py -o hrtf_normalization/exp3 -n crossmod sadie bili -t listen --norm_way 2
-# exp5
-# python3 hrtf_normalization/train.py -o hrtf_normalization/exp5 -n listen 3d3a bili crossmod cipic ita sadie ari riec -t hutubs --norm_way 2
 
 
 class HRTFDataset(Dataset):
@@ -37,7 +21,6 @@ class HRTFDataset(Dataset):
                         "listen": "Listen", "crossmod": "Crossmod", "sadie": "SADIE"}
         self.name = dataset
         self.dataset_obj = getattr(SOFAdatasets, dataset_dict[self.name])()
-        # print(self.dataset_obj.subject_dict)
         self.freq = freq
         self.scale = scale
         self.norm_way = norm_way
@@ -45,8 +28,6 @@ class HRTFDataset(Dataset):
         self._create_ITD_dict()
         self._normalize_hrtf_common_loc()
         self._normalize_hrtf()
-        # print(self.hrtf_normalized)
-        # self.hrtf_normalized_all_loc = None
         self._normalize_hrtf_all_loc()
         # self.max_mag = self._find_global_max_magnitude()
 
@@ -61,7 +42,6 @@ class HRTFDataset(Dataset):
         for subject_ID in self.dataset_obj.subject_IDs:
             L_idx = self.dataset_obj._get_ear_ID(subject_ID, 0)
             R_idx = self.dataset_obj._get_ear_ID(subject_ID, 1)
-            # print(f'L id is {L_idx}, R id is {R_idx}')
             L_irs = np.abs(self._get_hrir(L_idx))
             R_irs = np.abs(self._get_hrir(R_idx))
             L_peaks = np.argmax(L_irs, axis=1)
@@ -73,32 +53,6 @@ class HRTFDataset(Dataset):
                 self.ITD_dict[R_idx] = R_ITDs
             except Exception as e:
                 print(e, f'in {self.name}')
-        '''
-        index = 0
-        for path in self.dataset_obj.all_sofa_files:
-            # raw subject_ID, length is the num of people
-            # hrir sample rate is 44100
-            _, locations = self.dataset_obj._get_locations_from_one_sofa(path)
-            ear_L_peak_idxs = np.array([0] * len(locations))
-            ear_R_peak_idxs = np.array([0] * len(locations))
-            for loc in locations:
-                # each loc is a tuple
-                ear_L_hrir_single_loc = np.abs(self.dataset_obj._get_HRIR(self.dataset_obj.subject_IDs[index], loc, 'left'))
-                ear_R_hrir_single_loc = np.abs(self.dataset_obj._get_HRIR(self.dataset_obj.subject_IDs[index], loc, 'right'))
-                loc_idx = self.dataset_obj.all_location_dict[len(locations)][loc]
-                L_peak_idx = np.argmax(ear_L_hrir_single_loc)
-                R_peak_idx = np.argmax(ear_R_hrir_single_loc)
-                ear_L_peak_idxs[loc_idx] = L_peak_idx
-                ear_R_peak_idxs[loc_idx] = R_peak_idx
-            try:
-                L_ITDs = (ear_L_peak_idxs - ear_R_peak_idxs) * time_increment
-                R_ITDs = (ear_R_peak_idxs - ear_L_peak_idxs) * time_increment
-                self.ITD_dict.append(L_ITDs)
-                self.ITD_dict.append(R_ITDs)
-            except Exception as e:
-                print(e, f'in {self.name}')
-            index += 1
-        '''
                 
             
     def _get_hrir(self, idx):
@@ -109,10 +63,6 @@ class HRTFDataset(Dataset):
     def _get_mag_phase(self, idx, freq, scale='linear'):
         with open(os.path.join("/data2/neil/HRTF/prepocessed_hrirs", "%s_%03d.pkl" % (self.name, idx)), 'rb') as handle:
             location, hrir = pkl.load(handle)
-        '''
-        for i in range(len(hrir)):
-            hrir[i] = minimum_phase(hrir[i], method='hilbert')
-        '''
         
         ir = hrir[0]
         fig, ax = plt.subplots()
@@ -129,10 +79,6 @@ class HRTFDataset(Dataset):
         fig, ax = plt.subplots()
         ax.plot(ir, label=self.dataset_obj.name.upper()+" Subject%s" % self.dataset_obj._get_subject_ID(idx))
         
-        
-        
-        
-        # hrir = minimum_phase(hrir, method='homomorphic')
         tf_mag = np.abs(np.fft.fft(hrir, n=256))
         tf_phase = np.angle(np.fft.fft(hrir, n=256))
         tf_mag = tf_mag[:, 1:93]  # first 128 freq bins, but up to 16k
@@ -147,7 +93,6 @@ class HRTFDataset(Dataset):
         return location, tf_mag[:, freq][:, np.newaxis], tf_phase[:, freq][:, np.newaxis]
 
     def _get_hrtf(self, idx, freq, scale="linear", norm_way=0):
-        # location, hrir = self.dataset_obj[idx]
         with open(os.path.join("/data2/neil/HRTF/prepocessed_hrirs", "%s_%03d.pkl" % (self.name, idx)), 'rb') as handle:
             location, hrir = pkl.load(handle)
         
@@ -182,7 +127,6 @@ class HRTFDataset(Dataset):
                     d_azi = new_equator_azi[x] - new_equator_azi[x - 1]
                 total_energy += np.square(new_equator_tf[x]).mean() * d_azi
             tf = tf / np.sqrt(total_energy / 360)
-            # print(np.sqrt(total_energy / 360))
         ## fourth way is to normalize on common locations
         ## [(0.0, 0.0), (180.0, 0.0), (210.0, 0.0), (330.0, 0.0), (30.0, 0.0), (150.0, 0.0)]
         elif norm_way == 3:
@@ -193,61 +137,14 @@ class HRTFDataset(Dataset):
             mean_energy = np.sqrt(np.square(tf_common).mean())
             # print(mean_energy)
             tf = tf / mean_energy
+        ## fifth way is to normalize on ear and position bases avg person hrtf
         elif norm_way == 4:
-            '''
-            hrtf_norm = np.array(self.hrtf_normalized)
-            tf = np.divide(tf, hrtf_norm)
-            if self.hrtf_norm_factor is not None:
-                tf = np.multiply(tf, self.hrtf_norm_factor)
-            '''
-            
-            
-            '''
-            hrtf_norm = np.array(self.hrtf_normalized)
-            hrtf_norm = 20 * np.log10(hrtf_norm)
-            '''
-            '''
-            equator_index = np.where(np.logical_and(location[:, 1] > -1, location[:, 1] <= 0))
-            tf_equator = tf[equator_index]
-            equator_azi = location[equator_index, 0][0]
-            new_equator_index = np.argsort(equator_azi)
-            new_equator_azi = equator_azi[new_equator_index]
-            new_equator_tf = tf_equator[new_equator_index]
-
-            total_energy = 0
-            for x in range(len(new_equator_index)):
-                if x == 0:
-                    d_azi = 360 - new_equator_azi[-1]
-                    # d_azi = new_equator_azi[1] - new_equator_azi[0]
-                else:
-                    d_azi = new_equator_azi[x] - new_equator_azi[x - 1]
-            
-                
-                equator = new_equator_tf[x]
-                equator_norm = np.subtract(new_equator_tf[x], hrtf_norm)
-                if self.hrtf_norm_factor is not None:
-                    equator_norm = np.add(equator_norm, self.hrtf_norm_factor) 
-                equator = equator_norm - np.min(equator_norm) + np.min(equator)
-                # equator_norm - np.min(equator_norm) + np.min(equator)
-                # equator /= np.max(equator)
-                
-                
-                
-             
-                total_energy += np.square(equator).mean() * d_azi
-            tf = tf / np.sqrt(total_energy / 360) 
-            '''
             loc_key = tf.shape[0]
-            
-            # peak = np.max(tf, axis=1)
-            # tf = tf/peak[:,None]
-            # tf = tf/np.max(tf)
             tf = 20 * np.log10(tf)
             if (idx % 2) == 0:
                 tf_norm = 20 * np.log10(self.hrtf_normalized_all_loc_L[loc_key])
             else:
                 tf_norm = 20 * np.log10(self.hrtf_normalized_all_loc_R[loc_key])
-            # hrtf_norm = np.array(self.hrtf_normalized)
             try:
                 tf -= tf_norm
                 if self.hrtf_norm_factor is not None:
@@ -255,20 +152,8 @@ class HRTFDataset(Dataset):
                     tf = np.add(tf, hrtf_norm_factor)
             except ValueError:
                 print('ValueError, location points doesn"t match')
-            # tf_norm = np.divide(tf, hrtf_norm)
-            
-                # tf_norm = np.multiply(tf_norm, hrtf_norm_factor)
-            # tf = tf_norm - np.min(tf_norm) + np.min(tf) # shift to greater than one
-            # tf /= np.max(tf)
             tf = 10**(tf/20)
-            # tf = tf_norm
-            '''
-            norm_factor = norm_factor - np.min(norm_factor)
-            test_hrtf = np.subtract(test_hrtf, norm_factor)
-            test_hrtf -= np.min(test_hrtf)
-            test_hrtf /= np.max(test_hrtf)
-            '''
-            
+        ## sixth way is to normalize on avg person hrtf
         elif norm_way == 5:
             loc_key = tf.shape[0]
             tf = 20 * np.log10(tf)
@@ -281,14 +166,12 @@ class HRTFDataset(Dataset):
                     tf = np.add(tf, hrtf_norm_factor)
             except ValueError:
                 print('ValueError, location points doesn"t match')
-            tf = 10**(tf/20)
-            
-            # tf /= np.max(tf) # normalize between zero
+            tf = 10**(tf/20)  
+        ## seventh way is to normalize on position base person hrtf
         elif norm_way == 6:
             loc_key = tf.shape[0]
             tf = 20 * np.log10(tf)
             tf_norm = 20 * np.log10(self.hrtf_normalized_all_loc[loc_key])
-            # hrtf_norm = np.array(self.hrtf_normalized)
             try:
                 tf -= tf_norm
                 if self.hrtf_norm_factor is not None:
@@ -319,13 +202,11 @@ class HRTFDataset(Dataset):
 
     def __getitem__(self, idx):
         location, hrtf = self._get_hrtf(idx, self.freq, self.scale, self.norm_way)
-        # return location, hrtf / self.max_mag
         return location, hrtf, self.ITD_dict[idx]
 
     def _plot_frontal_data(self, idx, ax):
         loc_idx = self.dataset_obj._get_frontal_locidx()
         _, hrtf = self._get_hrtf(idx, "all", "linear")
-        # hrtf = hrtf / self.max_mag # normalization
         ax.plot(20 * np.log10(hrtf[loc_idx]), label=self.dataset_obj.name.upper()+" Subject%s" % self.dataset_obj._get_subject_ID(idx))
         ax.set(xticks=list(np.arange(0, 128 + 16, 16)),
                xticklabels=['{:,.2f}k'.format(x) for x in list(np.arange(0, 128 + 16, 16) / 256 * 44.1)],
@@ -335,11 +216,8 @@ class HRTFDataset(Dataset):
         
     def _plot_data_at_loc(self, idx, loc, ax):
         loc_idx = self.dataset_obj._get_locidx_from_location(loc)
-        # _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
         _, hrtf = self._get_hrtf(idx, "all", "linear", 4)
         hrtf_at_loc = hrtf[loc_idx]
-        # hrtf_at_loc = hrtf_at_loc/np.max(hrtf_at_loc) 
-        # hrtf = hrtf / self.max_mag # normalization
         ax.plot(20 * np.log10(hrtf_at_loc), label=self.dataset_obj.name.upper()+" Subject%s" % self.dataset_obj._get_subject_ID(idx))
         ax.set(xticks=list(np.arange(0, 128 + 16, 16)),
                xticklabels=['{:,.2f}k'.format(x) for x in list(np.arange(0, 128 + 16, 16) / 256 * 44.1)],
@@ -353,19 +231,7 @@ class HRTFDataset(Dataset):
         index = np.where((loc[:, 1] == 0) & np.isin(loc[:, 0], [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]))[0]
         x, y = np.meshgrid(list(range(phase.shape[1])), list(range(len(index))))
         phase = phase[index]
-        # hrtf_at_loc = hrtf_at_loc/np.max(hrtf_at_loc) 
-        # hrtf = hrtf / self.max_mag # normalization
-        # ax.plot_wireframe(x, y, phase, rstride=10, cstride=0)
         ax.plot_surface(x, y, phase)
-        # ax.plot(phase_at_loc, label=self.dataset_obj.name.upper()+" Subject%s" % self.dataset_obj._get_subject_ID(idx))
-        '''
-        ax.set(xticks=list(np.arange(0, 128 + 16, 16)),
-               xticklabels=['{:,.2f}k'.format(x) for x in list(np.arange(0, 128 + 16, 16) / 256 * 44.1)],
-               title=f"phase in {self.name} for subject {idx}",
-               ylabel='Magnitude',
-               xlabel='Frequency (Hz)',
-               zlabel='loc')
-        '''
         
     def plot_hrtf_phase_at_loc(self, idx, loc, ax):
         # _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
@@ -395,7 +261,6 @@ class HRTFDataset(Dataset):
         x = x / 256 * 44100
         x = x[1:105]
         ax.plot(x, 20 * np.log10(self.hrtf_normalized_common_loc[loc_id]), label=f'{self.name.upper()}')
-        # ax.set(title=f"{self.name}")
         
     def _plot_normalized_hrtf_all_loc(self, ax):
         _, hrtf = self._get_hrtf(0, "all", "linear")
@@ -442,7 +307,6 @@ class HRTFDataset(Dataset):
                     loc_idx = self.dataset_obj.all_location_dict[loc_key][(azimuth, 0)]
                     hrtf_normalized_single_loc = [sum(x) for x in zip(hrtf_normalized_single_loc, hrtf[loc_idx])]
                 except KeyError:
-                    # print(f'KeyError in dataset {self.name}')
                     try:
                         loc_idx = self.dataset_obj.all_location_dict[loc_key][(azimuth, -0.72)]
                     except KeyError:
@@ -456,39 +320,18 @@ class HRTFDataset(Dataset):
             self.hrtf_normalized_common_loc.append(hrtf_normalized_single_loc)
     
     def _normalize_hrtf_all_loc(self):
-        '''
-        _, hrtf = self._get_hrtf(0, "all", "linear")
-        self.hrtf_normalized_all_loc = [0.0] * len(hrtf[0])
-        normalization_factor = 0
-        for idx in self.dataset_obj.subject_dict.values():
-            _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
-            for loc_idx in self.dataset_obj.location_dict.values():
-                normalization_factor += 1
-                try:   
-                    self.hrtf_normalized_all_loc = [sum(x) for x in zip(self.hrtf_normalized_all_loc, hrtf[loc_idx])]
-                except IndexError:
-                    print(f'IndexError, mismatch of hrtf size within {self.name}')
-                    normalization_factor -= 1    
-        self.hrtf_normalized_all_loc = [x / normalization_factor for x in self.hrtf_normalized_all_loc]
-        '''
-        
         if len(self.dataset_obj.all_location_dict) == 1:
             _, hrtf = self._get_hrtf(0, "all", "linear")
-            self.hrtf_normalized_all_loc_L = {} # dict of np.array
-            self.hrtf_normalized_all_loc_R = {} # dict of np.array
+            self.hrtf_normalized_all_loc_L = {} 
+            self.hrtf_normalized_all_loc_R = {}
             self.hrtf_normalized_all_loc = {}
             normalization_factor = 0 
             for key, value in self.dataset_obj.all_location_dict.items():
                 self.hrtf_normalized_all_loc_L[key] = np.array([[0.0] * len(hrtf[0])] * len(value))
                 self.hrtf_normalized_all_loc_R[key] = np.array([[0.0] * len(hrtf[0])] * len(value))
                 self.hrtf_normalized_all_loc[key] = np.array([[0.0] * len(hrtf[0])] * len(value))
-            # self.hrtf_normalized_all_loc = np.array([[0.0] * len(hrtf[0])] * len(self.dataset_obj.location_dict))
             for idx in range(self.__len__()):
                 _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
-                # normalize every loc hrtf between 0 and 1
-                # peak = np.max(hrtf, axis=1)
-                # hrtf = hrtf/peak[:,None]
-                # hrtf = hrtf/np.max(hrtf)
                 loc_key = hrtf.shape[0]
                 try:
                     self.hrtf_normalized_all_loc[loc_key] += hrtf
@@ -506,14 +349,12 @@ class HRTFDataset(Dataset):
                 self.hrtf_normalized_all_loc_R[key] /= normalization_factor
                 self.hrtf_normalized_all_loc[key] /= (normalization_factor * 2)
         else:
-            # if len(self.dataset_obj.all_location_dict) > 1
-            
             _, hrtf = self._get_hrtf(0, "all", "linear")
-            normalization_factor = {} # dict of int for different location tuples
-            loc_norm_dict_L = {} # dict contains all possible loc in the dataset
+            normalization_factor = {} 
+            loc_norm_dict_L = {} 
             loc_norm_dict_R = {}
             loc_norm_dict = {}
-            self.hrtf_normalized_all_loc_L = {} # dict of np.array
+            self.hrtf_normalized_all_loc_L = {}
             self.hrtf_normalized_all_loc_R = {}
             self.hrtf_normalized_all_loc = {}
             for key, value in self.dataset_obj.all_location_dict.items():
@@ -530,12 +371,8 @@ class HRTFDataset(Dataset):
                         normalization_factor[key] = 0
             for idx in range(self.__len__()):
                 _, hrtf = self._get_hrtf(idx, "all", "linear", -1)
-                # peak = np.max(hrtf, axis=1)
-                # hrtf = hrtf/peak[:,None]
-                # hrtf = hrtf/np.max(hrtf)
                 loc_key = hrtf.shape[0]
                 for key in self.dataset_obj.all_location_dict[loc_key].keys():
-                    # each key is a tuple of location
                     loc_idx = self.dataset_obj.all_location_dict[loc_key][key]
                     loc_norm_dict[key] += hrtf[loc_idx]
                     if (idx % 2) == 0: # left ear
@@ -548,21 +385,15 @@ class HRTFDataset(Dataset):
                 loc_norm_dict_R[key] /= normalization_factor[key] 
                 loc_norm_dict[key] /= (normalization_factor[key] * 2)
             for key, value in loc_norm_dict_L.items():
-                # key is tuple of location, value is np array of normalized hrtf
                 for key_j, value_j in self.dataset_obj.all_location_dict.items():
-                    # key_j is location dim, value_j is dict maps from loc tuple to loc_id
                     if key in value_j:
                         self.hrtf_normalized_all_loc_L[key_j][value_j[key]] = value
             for key, value in loc_norm_dict_R.items():
-                # key is tuple of location, value is np array of normalized hrtf
                 for key_j, value_j in self.dataset_obj.all_location_dict.items():
-                    # key_j is location dim, value_j is dict maps from loc tuple to loc_id
                     if key in value_j:
                         self.hrtf_normalized_all_loc_R[key_j][value_j[key]] = value
             for key, value in loc_norm_dict.items():
-                # key is tuple of location, value is np array of normalized hrtf
                 for key_j, value_j in self.dataset_obj.all_location_dict.items():
-                    # key_j is location dim, value_j is dict maps from loc tuple to loc_id
                     if key in value_j:
                         self.hrtf_normalized_all_loc[key_j][value_j[key]] = value
         self.hrtf_normalized_all_loc_mix = {}
@@ -590,21 +421,7 @@ class MergedHRTFDataset(Dataset):
                                       np.array(dataset.hrtf_normalized_all_loc_L),
                                       dataset.hrtf_normalized_common_loc,
                                       ITD_array))
-            self.length_array.append(len(dataset))
-        # self.length_sum = np.insert(np.cumsum(self.length_array), 0, 0)
-        
-        '''
-        self.common_loc = []
-        for i in range(12):
-            loc_all = [0] * len(self.all_datasets['ari'].hrtf_normalized)
-            loc_all = np.array(loc_all)
-            for dataset in self.all_datasets.values():
-                loc_all = np.add(loc_all, np.array(dataset.hrtf_normalized_common_loc[i]))
-            loc_all = loc_all/len(self.all_datasets)
-            self.common_loc.append(loc_all)
-        '''
-        
-        
+            self.length_array.append(len(dataset))        
 
     def __len__(self):
         return np.sum(self.length_array)
@@ -861,55 +678,8 @@ def fitting_dataset_wrapper(idx, dataset="crossmod", freq=1, part="full"):
 
 
 if __name__ == "__main__":
-    '''
-    res = HRTFDataset(dataset='hutubs')
-    fig, ax = plt.subplots()
-    fig.suptitle(f'{res.name} Frequency Response at Tewlve Source Positions')
-    res._plot_normalized_hrtf_common_loc(ax)
-    plt.legend()
-    '''
-    # rint(len(res))
-    # print(res.ITD_dict)
-    '''
-    fig, axs = plt.subplots(4, 4, sharex=True, sharey=True, figsize=(15, 15))
-    axs = axs.flat
-    for id in range(0, len(res)):
-        if id > 15:
-            break
-        res._plot_data_at_loc(id, (270, 0), axs[id])
-    '''
-    # fig, ax = plt.subplots(figsize=(8, 12), subplot_kw={'projection': '3d'})
-    # res.plot_hrtf_phase(0, ax)
-    # fig, ax = plt.subplots()
-    # res.plot_hrtf_phase_at_loc(0, (0, 0), ax)
-    # res._plot_frontal_data(1, ax)
-    # res._plot_normalized_hrtf(ax)
-    # res._set_ax(ax)
-    
-    # no ita, sadie, ari
-    
     datasets = MergedHRTFDataset(["ari", "bili", "crossmod", 
                                   "hutubs", "listen", "riec", 
                                   "sadie", "3d3a"],
                                  freq=15)
-    # datasets.plot_normalized_hrtf_all_loc()
     datasets.plot_normalized_hrtfs_at_locs(0, 3)
-    '''
-    for key, value in datasets.all_datasets.items():
-        print(f'{key} has {len(value)} samples')
-    '''
-    # datasets.plot_normalized_hrtfs()
-    '''
-    for i in range(12):
-        datasets.plot_normalized_hrtfs_at_loc(loc_id=i)
-    '''
-    '''
-    for item in datasets:
-        loc, hrtf, name, hrtf_normalize_factor, _, _ = item
-        print(loc)
-        print(loc.shape)
-        break
-    '''
-
-
-# %%
