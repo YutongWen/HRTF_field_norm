@@ -1,0 +1,13 @@
+librosa @ file:///home/conda/feedstock_root/build_artifacts/librosa_1656336149289/work
+matplotlib @ file:///home/conda/feedstock_root/build_artifacts/matplotlib-suite_1632416634429/work
+natsort==8.2.0
+numpy==1.21.4
+pandas==1.5.1
+plotly==5.11.0
+python-sofa==0.2.0
+scikit-learn @ file:///croot/scikit-learn_1665482011620/work
+scipy==1.9.1
+soundfile @ file:///home/conda/feedstock_root/build_artifacts/pysoundfile_1665058838115/work
+torch==1.8.0
+tqdm==4.62.3
+wandb==0.13.4

@@ -1,4 +1,3 @@
-#%%
 import SOFAdatasets
 import torch
 from torch.utils.data import Dataset
@@ -8,7 +7,6 @@ import pickle as pkl
 import os
 from matplotlib import pyplot as plt
 import matplotlib
-from scipy.signal import minimum_phase
 from scipy.signal import hilbert
 
 
