@@ -1,5 +1,5 @@
 # HRTF_field_norm
-This is the official implementation of the paper "Mitigating Cross-Database Differences for Learning Unified HRTF Representation" [arXiv](https://arxiv.org/abs/2307.14547)
+This is the official implementation of the paper "Mitigating Cross-Database Differences for Learning Unified HRTF Representation" [[arXiv]](https://arxiv.org/abs/2307.14547) 
 # how to train
 
 norm way 4 is the proposed method,
